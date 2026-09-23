@@ -59,6 +59,11 @@ void drop_all_capabilities()
        point.  Do not keep capabilities in the permitted set for later
        re-enabling: once privilege is dropped, later packet handling must not be
        able to regain it.
+
+       Every socket option applied per probe after this point must therefore
+       work without privilege.  See set_bind_to_device() in construct_unix.c
+       for how SO_BINDTODEVICE, which needs CAP_NET_RAW to re-bind an already
+       bound socket, is kept to a single unprivileged bind per socket.
      */
     if (cap_set_proc(wanted_cap)) {
         goto pcap_error;
