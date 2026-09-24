@@ -21,6 +21,7 @@
 #include "utils.h"
 
 #include <errno.h>
+#include <net/if.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -306,11 +307,35 @@ int set_socket_mark(
 #endif /* ifdef SO_MARK */
 
 #ifdef SO_BINDTODEVICE
+/*
+    Bind the socket to a network device.
+
+    Linux lets an unprivileged process bind a socket to a device only
+    while the socket is not yet bound to one; re-binding, even to the
+    same device, requires CAP_NET_RAW.  mtr-packet drops all of its
+    capabilities right after opening its sockets and then applies the
+    probe parameters to the same shared send socket for every probe,
+    so a plain setsockopt succeeds for the first probe and fails with
+    EPERM for every later one.  Skip the setsockopt when the socket is
+    already bound to the requested device.  (Requesting a different
+    device on an already-bound shared socket still fails with EPERM,
+    which is reported as permission-denied for that probe.)
+*/
 static
 int set_bind_to_device(
     int socket,
     char const *device)
 {
+    char bound_device[IFNAMSIZ];
+    socklen_t bound_device_len = sizeof(bound_device);
+
+    memset(bound_device, 0, sizeof(bound_device));
+    if (getsockopt(socket, SOL_SOCKET, SO_BINDTODEVICE,
+                   bound_device, &bound_device_len) == 0 &&
+        strcmp(bound_device, device) == 0) {
+        return 0;
+    }
+
     return setsockopt(socket, SOL_SOCKET, SO_BINDTODEVICE, device,
                       strlen(device));
 }
